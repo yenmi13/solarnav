@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2001: NAV CLEAN [FIXED]</title>
+    <style>
+        /* AESTHETIC: Y2K x VOID x DATA */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Share+Tech+Mono&family=Noto+Sans+TC:wght@300;500&display=swap');
+
+        :root {
+            --bg-color: #000000;
+            --accent: #ff3333; /* HAL Red */
+            --earth-cyan: #00f3ff; /* Cyber Blue */
+            --glass: rgba(10, 0, 0, 0.85);
+            --border-color: rgba(255, 51, 51, 0.5);
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+            background-color: var(--bg-color);
+            font-family: 'Share Tech Mono', monospace; color: #e0e0e0;
+            user-select: none; -webkit-user-select: none; touch-action: none;
+        }
+
+        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+
+        /* UI LAYER */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;
+            pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
+            padding: 24px; box-sizing: border-box;
+        }
+
+        /* HEADER */
+        .header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            pointer-events: auto;
+            width: 100%;
+        }
+        
+        .brand-area {
+            flex: 0 0 auto;
+        }
+        
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; letter-spacing: 2px; margin: 0; color: var(--accent); text-shadow: 0 0 10px rgba(255,51,51,0.5); }
+        .status { font-size: 0.8rem; color: var(--accent); opacity: 0.8; margin-top: 5px; }
+
+        /* NAVIGATION CONTROLS (Top Right) */
+        .nav-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        /* CUSTOM DROPDOWN */
+        .custom-select-wrapper {
+            position: relative;
+            user-select: none;
+            width: 180px;
+            font-family: 'Share Tech Mono', monospace;
+            /* Hide in surface mode */
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        
+        /* HIDE DROPDOWN IN SURFACE MODE */
+        body.mode-surface .custom-select-wrapper {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        
+        .custom-select {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .custom-select__trigger {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            font-size: 1rem;
+            font-weight: 300;
+            color: var(--accent);
+            height: 40px;
+            line-height: 40px;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid var(--accent);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .custom-select__trigger:hover {
+            box-shadow: 0 0 10px var(--accent);
+        }
+        
+        .custom-select__options {
+            position: absolute;
+            display: block;
+            top: 100%;
+            left: 0;
+            right: 0;
+            border: 1px solid var(--accent);
+            border-top: 0;
+            background: rgba(0, 0, 0, 0.95);
+            transition: all 0.3s;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            z-index: 20;
+            max-height: 300px; /* Scrollable if too many */
+            overflow-y: auto;
+        }
+        
+        .custom-select.open .custom-select__options {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: all;
+        }
+        
+        .custom-option {
+            position: relative;
+            display: block;
+            padding: 10px 12px;
+            font-size: 0.9rem;
+            font-weight: 300;
+            color: #aaa;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 1px solid rgba(255,51,51,0.2);
+        }
+        
+        .custom-option:hover {
+            color: var(--accent);
+            background: rgba(255, 51, 51, 0.1);
+            padding-left: 18px; /* Slide effect */
+        }
+        
+        .arrow {
+            position: relative;
+            height: 10px;
+            width: 10px;
+        }
+        .arrow::after {
+            content: "▼"; font-size: 0.7rem;
+        }
+
+        /* BUTTONS */
+        .ui-btn { 
+            background: transparent; border: 1px solid var(--accent); color: var(--accent); 
+            padding: 0 16px; height: 40px; /* Match dropdown height */
+            line-height: 38px; /* Vertically center text */
+            font-family: inherit; cursor: pointer; text-transform: uppercase; 
+            transition: 0.3s; pointer-events: auto; 
+            display: inline-block;
+            box-sizing: border-box;
+        }
+        .ui-btn:hover { background: var(--accent); color: #000; }
+        
+        #btn-back { 
+            opacity: 0; pointer-events: none; transition: opacity 0.3s; 
+            min-width: 100px; text-align: center;
+        }
+        body.mode-surface #btn-back { opacity: 1; pointer-events: auto; }
+
+        /* ORBIT OVERLAY */
+        #orbit-overlay {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; opacity: 1; transition: opacity 0.5s;
+        }
+        .reticle {
+            width: 120px; height: 120px; border: 1px solid rgba(255,51,51,0.3); border-radius: 50%;
+            margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;
+        }
+        .reticle::after { content:'+'; color: var(--accent); font-size: 20px; }
+        .hint { letter-spacing: 3px; font-size: 0.8rem; color: var(--accent); opacity: 0.7; }
+
+        /* SURFACE PANEL */
+        #surface-panel {
+            position: absolute; top: 80px; left: 24px; width: 280px;
+            background: linear-gradient(90deg, var(--glass) 0%, transparent 100%);
+            border-left: 2px solid var(--accent); padding: 20px;
+            opacity: 0; transform: translateX(-50px); transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: auto; cursor: pointer; overflow: hidden; max-height: 600px;
+        }
+        body.mode-surface #surface-panel { opacity: 1; transform: translateX(0); }
+        
+        #surface-panel.collapsed {
+            max-height: 70px; 
+            background: linear-gradient(90deg, rgba(20, 0, 0, 0.4) 0%, transparent 100%);
+            border-left: 2px solid rgba(255, 51, 51, 0.5);
+        }
+        #surface-panel.collapsed .data-container { opacity: 0; pointer-events: none; }
+        
+        .planet-name-tc { font-family: 'Noto Sans TC'; font-size: 2.5rem; color: var(--accent); margin: 0; line-height: 1.1; transition: font-size 0.3s; }
+        #surface-panel.collapsed .planet-name-tc { font-size: 1.8rem; }
+        .planet-name-en { font-size: 1rem; color: #888; letter-spacing: 2px; margin-bottom: 15px; display: block; transition: opacity 0.3s; }
+        
+        .data-container { transition: opacity 0.3s; margin-top: 10px; }
+        .data-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; border-bottom: 1px dashed #333; padding-bottom: 4px; font-family: 'Noto Sans TC', sans-serif; }
+        .data-label { color: #888; } .data-val { color: var(--accent); font-family: 'Share Tech Mono', monospace; }
+
+        /* TIMELINE */
+        #timeline-container {
+            width: 100%; max-width: 400px; margin: 0 auto;
+            opacity: 0; transform: translateY(20px); transition: all 0.5s 0.2s;
+            pointer-events: auto; text-align: center;
+        }
+        body.mode-surface #timeline-container { opacity: 1; transform: translateY(0); }
+        .tl-label { font-family: 'Noto Sans TC', sans-serif; font-size: 0.9rem; color: var(--accent); margin-bottom: 10px; background: rgba(0,0,0,0.7); display: inline-block; padding: 6px 12px; border: 1px solid #333; }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 2px; background: #333; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #000; border: 2px solid var(--accent); margin-top: -9px; box-shadow: 0 0 10px var(--accent); }
+
+        /* EARTH MARKER */
+        #earth-marker { position: absolute; top:0; left:0; pointer-events: none; display: none; transform: translate(-50%, -50%); flex-direction: column; align-items: center; justify-content: center; width: 100px; height: 100px; }
+        .e-bracket { position: absolute; width: 10px; height: 10px; border-color: var(--earth-cyan); border-style: solid; opacity: 0.8; transition: all 0.3s ease; }
+        .e-tl { top: 30px; left: 30px; border-width: 2px 0 0 2px; }
+        .e-tr { top: 30px; right: 30px; border-width: 2px 2px 0 0; }
+        .e-bl { bottom: 30px; left: 30px; border-width: 0 0 2px 2px; }
+        .e-br { bottom: 30px; right: 30px; border-width: 0 2px 2px 0; }
+        .e-label { position: absolute; top: 10px; color: var(--earth-cyan); font-size: 0.8rem; letter-spacing: 2px; text-shadow: 0 0 5px var(--earth-cyan); font-family: 'Noto Sans TC', sans-serif; }
+
+        #loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 100; display: flex; justify-content: center; align-items: center; color: var(--accent); letter-spacing: 5px; transition: opacity 0.5s; }
+    </style>
+</head>
+<body>
+
+    <div id="loader">SYSTEM INITIALIZING...</div>
+
+    <div id="ui-layer">
+        <div class="header">
+            <div class="brand-area">
+                <h1>SOLAR_NAV</h1>
+                <div class="status" id="sys-status">ORBITAL SCAN</div>
+            </div>
+            
+            <div class="nav-controls">
+                <!-- Custom Dropdown for Planet Selection -->
+                <div class="custom-select-wrapper" onclick="this.querySelector('.custom-select').classList.toggle('open')">
+                    <div class="custom-select">
+                        <div class="custom-select__trigger">
+                            <span id="nav-label">SELECT TARGET</span>
+                            <div class="arrow"></div>
+                        </div>
+                        <div class="custom-select__options" id="planet-options">
+                            <!-- Options populated by JS -->
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="ui-btn" id="btn-back" onclick="returnToOrbit()">DISENGAGE</button>
+            </div>
+        </div>
+
+        <div id="orbit-overlay">
+            <div class="reticle"></div>
+            <div class="hint">TAP PLANET OR USE MENU TO LAND</div>
+        </div>
+
+        <!-- Clickable Panel -->
+        <div id="surface-panel" onclick="togglePanel()">
+            <h2 class="planet-name-tc" id="p-tc">--</h2>
+            <span class="planet-name-en" id="p-en">--</span>
+            <div class="data-container">
+                <div class="data-row"><span class="data-label">半徑 (地球=1)</span><span class="data-val" id="p-rad">--</span></div>
+                <div class="data-row"><span class="data-label">距離 (AU)</span><span class="data-val" id="p-dist">--</span></div>
+                <div class="data-row"><span class="data-label">重力 (g)</span><span class="data-val" id="p-grav">--</span></div>
+                <div class="data-row"><span class="data-label">平均氣溫</span><span class="data-val" id="p-temp">--</span></div>
+                <div class="data-row"><span class="data-label">一日長度</span><span class="data-val" id="p-daylen">--</span></div>
+                <div style="margin-top:15px; font-size:0.8rem; color:#aaa; line-height:1.5; font-family: 'Noto Sans TC';" id="p-desc">--</div>
+            </div>
+        </div>
+
+        <!-- Earth Marker -->
+        <div id="earth-marker">
+            <div class="e-label">地球</div>
+            <div class="e-bracket e-tl"></div>
+            <div class="e-bracket e-tr"></div>
+            <div class="e-bracket e-bl"></div>
+            <div class="e-bracket e-br"></div>
+        </div>
+
+        <div id="timeline-container">
+            <div class="tl-label" id="tl-text">拖曳觀測</div>
+            <input type="range" id="time-slider" min="0" max="1000" value="500" oninput="updateTime(this.value)">
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+
+    <script>
+        // CONFIG
+        const CONFIG = { camZ: 450, bg: 0x000000, fovOrbit: 45, fovSurface: 75 };
+        const BASE_SPEED_FACTOR = 0.005; 
+        const simplex = new SimplexNoise();
+
+        // Removed Time Dilation logic since button is removed
+        let timeScale = 1.0;
+        
+        const SUN_DATA = {
+            name: "SUN", tc: "太陽", size: 15, dist: 0, realAU: 0, color: 0xffaa00,
+            rad: "109.0x", grav: "27.9", temp: "5505°C", dayLength: 609, 
+            desc: "太陽系的中心恆星。它佔了太陽系總質量的 99.86%。所有生命的源頭。"
+        };
+
+        const PLANETS = [
+            { name: "MERCURY", tc: "水星", type: 'rock', surfaceType: 'rock_std', size: 2, dist: 40, realAU: 0.4, period: 0.24, color: 0xAAAAAA, groundColor: 0x555555, fogColor: 0x000000, fogDens: 0.002, rad: "0.38x", grav: "0.38", temp: "430°C", dayLength: 1408, desc: "像月球一樣的死寂荒原。地面佈滿隕石坑，天空永遠漆黑。" },
+            { name: "VENUS", tc: "金星", type: 'rock', surfaceType: 'rock_lava', size: 3.5, dist: 65, realAU: 0.7, period: 0.62, color: 0xDDBB88, groundColor: 0x221100, fogColor: 0xcc9944, fogDens: 0.08, rad: "0.95x", grav: "0.90", temp: "471°C", dayLength: 5832, desc: "濃厚的黃色毒氣雲霧籠罩一切。能見度極低，地表像融化的蠟。" },
+            { name: "EARTH", tc: "地球", type: 'rock', surfaceType: 'rock_std', size: 3.6, dist: 90, realAU: 1.0, period: 1.00, color: 0x2255FF, groundColor: 0x112244, fogColor: 0xaaccff, fogDens: 0.005, rad: "1.00x", grav: "1.00", temp: "15°C", dayLength: 24, desc: "家。" },
+            { name: "MARS", tc: "火星", type: 'rock', surfaceType: 'rock_std', size: 2.5, dist: 120, realAU: 1.5, period: 1.88, color: 0xFF4400, groundColor: 0xcc4422, fogColor: 0xdd6644, fogDens: 0.02, rad: "0.53x", grav: "0.38", temp: "-28°C", dayLength: 25, desc: "紅色的氧化鐵沙漠。空氣中飄浮著鏽色的塵埃。" },
+            { name: "JUPITER", tc: "木星", type: 'gas', surfaceType: 'gas_jupiter', size: 10, dist: 180, realAU: 5.2, period: 11.86, color: 0xD9A066, groundColor: 0xcc9966, cloudColor: 0xddaa88, fogColor: 0xcc9966, fogDens: 0.02, rad: "11.2x", grav: "2.36", temp: "-108°C", dayLength: 10, desc: "氣體巨行星之王。腳下是劇烈翻騰的氨雲層，條紋狀的風暴綿延萬里。" },
+            { name: "SATURN", tc: "土星", type: 'gas', surfaceType: 'gas_saturn', hasRings: true, size: 9, dist: 240, realAU: 9.5, period: 29.45, color: 0xF4D03F, groundColor: 0xeedd88, cloudColor: 0xffeeaa, fogColor: 0xddcc77, fogDens: 0.025, rad: "9.45x", grav: "1.07", temp: "-138°C", dayLength: 11, desc: "金色的迷霧世界。大氣呈現柔和的奶油色，巨大的光環在天空中投下陰影。" },
+            { name: "URANUS", tc: "天王星", type: 'gas', surfaceType: 'gas_slush', hasRings: true, ringTilt: true, size: 6, dist: 300, realAU: 19.8, period: 84.02, color: 0x4FD8EB, groundColor: 0x44bbcc, cloudColor: 0xaaffff, fogColor: 0x66ccdd, fogDens: 0.03, rad: "4.0x", grav: "0.89", temp: "-195°C", dayLength: 17, desc: "冰冷的青色迷霧。周圍是一片單調而神秘的甲烷冰晶。" },
+            { name: "NEPTUNE", tc: "海王星", type: 'gas', surfaceType: 'gas_slush', hasRings: true, size: 6, dist: 350, realAU: 30.0, period: 164.79, color: 0x4B70DD, groundColor: 0x2244aa, cloudColor: 0x4466cc, fogColor: 0x223399, fogDens: 0.04, rad: "3.8x", grav: "1.14", temp: "-201°C", dayLength: 16, desc: "深藍色的極寒風暴。大氣深處可能下著鑽石雨。" },
+            { name: "PLUTO", tc: "冥王星", type: 'rock', surfaceType: 'rock_ice', size: 1.5, dist: 400, realAU: 39.5, period: 248.00, color: 0xDDDDDD, groundColor: 0xaaaaaa, fogColor: 0x111111, fogDens: 0.005, rad: "0.18x", grav: "0.06", temp: "-229°C", dayLength: 153, desc: "太陽系邊緣的冰封世界。尖銳的氮冰山脈在微弱的陽光下投下長長的影子。" }
+        ];
+
+        let scene, camera, renderer, raycaster, mouse;
+        let solarSystem, planetMeshes = [], orbitRings = [];
+        let activePlanet = null;
+        let earthMesh = null; 
+        let earthOrbitMesh = null; 
+        let trajectoryLine = null;
+        
+        let skyGroup = null; 
+        let groundGroup = null; 
+        let terrainMesh = null;
+        let particles = null;
+        let instancedRocks = null;
+        let cloudLayers = [];
+        let skyRings = null;
+
+        function init() {
+            initDropdown();
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(CONFIG.bg);
+            camera = new THREE.PerspectiveCamera(CONFIG.fovOrbit, window.innerWidth/window.innerHeight, 0.1, 8000);
+            camera.position.set(0, 100, CONFIG.camZ);
+            camera.lookAt(0,0,0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            const sunLight = new THREE.PointLight(0xffffff, 2, 2000);
+            scene.add(sunLight);
+            scene.add(new THREE.AmbientLight(0x404040, 0.5));
+
+            createUniverse();
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            window.addEventListener('resize', onResize);
+            document.getElementById('canvas-container').addEventListener('click', onCanvasClick);
+            
+            document.addEventListener('click', function(e) {
+                const select = document.querySelector('.custom-select');
+                if (!select.contains(e.target)) {
+                    select.classList.remove('open');
+                }
+            });
+
+            requestAnimationFrame(animate);
+            setTimeout(() => document.getElementById('loader').style.opacity = 0, 500);
+            setTimeout(() => document.getElementById('loader').style.display = 'none', 1000);
+        }
+        
+        function initDropdown() {
+            const optionsContainer = document.getElementById('planet-options');
+            addOption(optionsContainer, SUN_DATA, 'SUN');
+            PLANETS.forEach(p => {
+                addOption(optionsContainer, p, p.name);
+            });
+        }
+        
+        function addOption(container, data, idName) {
+            const opt = document.createElement('span');
+            opt.className = 'custom-option';
+            opt.innerText = data.tc + " [" + data.name + "]";
+            opt.dataset.value = idName;
+            opt.onclick = function() {
+                document.querySelector('.custom-select').classList.remove('open');
+                let targetMesh = planetMeshes.find(m => m.userData.name === data.name);
+                if (targetMesh) {
+                    if(targetMesh.userData.name === 'EARTH') {
+                        alert("無法觀測：您已在地球上");
+                    } else {
+                        enterSurfaceMode(targetMesh);
+                    }
+                }
+            };
+            container.appendChild(opt);
+        }
+
+        function createUniverse() {
+            solarSystem = new THREE.Group();
+            scene.add(solarSystem);
+
+            // SUN
+            const sunGeo = new THREE.SphereGeometry(15, 32, 32);
+            const sunMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+            const sun = new THREE.Mesh(sunGeo, sunMat);
+            sun.userData = { ...SUN_DATA, isPlanet: true, type: 'star', groundColor: 0xffaa00, fogColor: 0xff5500, fogDens: 0.02 };
+            solarSystem.add(sun);
+            planetMeshes.push(sun);
+            
+            const glowGeo = new THREE.RingGeometry(16, 25, 32);
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0xff8800, side: THREE.DoubleSide, transparent:true, opacity:0.3 });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            glow.lookAt(camera.position);
+            sun.userData.glow = glow; 
+            solarSystem.add(glow);
+
+            // PLANETS
+            PLANETS.forEach(data => {
+                const pivot = new THREE.Group();
+                pivot.rotation.y = Math.random() * Math.PI * 2;
+                pivot.userData = { speed: BASE_SPEED_FACTOR / data.period };
+                solarSystem.add(pivot);
+
+                const geo = new THREE.SphereGeometry(data.size, 32, 32);
+                const mat = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.8 });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(data.dist, 0, 0);
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = 256; canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                ctx.font = 'bold 40px Arial';
+                ctx.fillStyle = 'rgba(255, 51, 51, 0.8)';
+                ctx.textAlign = 'center';
+                ctx.fillText(data.name, 128, 48);
+                const tex = new THREE.CanvasTexture(canvas);
+                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+                sprite.position.set(0, data.size + 8, 0);
+                sprite.scale.set(25, 6.25, 1);
+                mesh.add(sprite);
+
+                mesh.userData = { ...data, isPlanet: true, pivot: pivot, sprite: sprite };
+                pivot.add(mesh);
+                planetMeshes.push(mesh);
+
+                const ring = new THREE.Mesh(
+                    new THREE.RingGeometry(data.dist-0.8, data.dist+0.8, 128),
+                    new THREE.MeshBasicMaterial({ color: 0x666666, side: THREE.DoubleSide, transparent:true, opacity:0.5 })
+                );
+                ring.rotation.x = Math.PI/2;
+                solarSystem.add(ring);
+                ring.userData = { targetPlanet: mesh };
+                orbitRings.push(ring); 
+
+                if(data.name === 'EARTH') earthOrbitMesh = mesh;
+            });
+
+            // EARTH SURFACE VIEW
+            const eGeo = new THREE.SphereGeometry(5, 64, 64); 
+            const eMat = new THREE.MeshPhongMaterial({ color: 0x000000, emissive: 0x112244, specular: 0x111111, shininess: 50 });
+            earthMesh = new THREE.Mesh(eGeo, eMat);
+            
+            const canvas = document.createElement('canvas'); canvas.width=128; canvas.height=128;
+            const ctx = canvas.getContext('2d');
+            const g = ctx.createRadialGradient(64,64,0, 64,64,64);
+            g.addColorStop(0, 'rgba(0, 243, 255, 1)'); 
+            g.addColorStop(0.2, 'rgba(0, 100, 255, 0.8)'); 
+            g.addColorStop(0.5, 'rgba(0, 0, 50, 0.2)'); 
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle=g; ctx.fillRect(0,0,128,128);
+            const tex = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map: tex, transparent: true, blending: THREE.AdditiveBlending}));
+            sprite.scale.set(30, 30, 1); 
+            earthMesh.add(sprite);
+            earthMesh.userData.sprite = sprite; 
+            
+            const coreGeo = new THREE.SphereGeometry(3, 32, 32);
+            const coreMat = new THREE.MeshBasicMaterial({ color: 0x00aaff });
+            const core = new THREE.Mesh(coreGeo, coreMat);
+            earthMesh.add(core);
+            earthMesh.visible = false;
+            scene.add(earthMesh);
+        }
+
+        function generateTerrainTexture(data) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            const col = new THREE.Color(data.groundColor);
+            ctx.fillStyle = `#${col.getHexString()}`;
+            ctx.fillRect(0,0,512,512);
+            
+            if(data.surfaceType === 'gas_jupiter') {
+                for (let y = 0; y < 512; y++) {
+                    const ny = (y / 512) * 2 - 1;
+                    const band = Math.sin(ny * 12 + Math.sin(ny * 10) * 0.5);
+                    const noiseVal = Math.random() * 0.1;
+                    let r, g, b;
+                    if (band > 0.5) { r=220; g=200; b=180; }
+                    else if (band > 0) { r=200; g=150; b=100; }
+                    else { r=140; g=90; b=70; }
+                    r += noiseVal * 40; g += noiseVal * 40; b += noiseVal * 40;
+                    ctx.fillStyle = `rgb(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)})`;
+                    ctx.fillRect(0, y, 512, 1);
+                }
+            } else if(data.surfaceType === 'gas_saturn') {
+                 const grad = ctx.createLinearGradient(0,0,0,512);
+                 grad.addColorStop(0, '#ddbb88'); grad.addColorStop(0.5, '#eebb99'); grad.addColorStop(1, '#ccaa77');
+                 ctx.fillStyle = grad; ctx.fillRect(0,0,512,512);
+                 for(let i=0; i<512; i+=2) {
+                     if(Math.random()>0.5) { ctx.fillStyle = `rgba(255,255,255,0.03)`; ctx.fillRect(0, i, 512, 2); }
+                 }
+            } else if(data.surfaceType === 'rock_lava') {
+                ctx.fillStyle = '#110000'; ctx.fillRect(0,0,512,512);
+                ctx.strokeStyle = '#ff3300'; ctx.lineWidth = 3; ctx.beginPath();
+                for(let i=0; i<60; i++){ ctx.moveTo(Math.random()*512, Math.random()*512); ctx.lineTo(Math.random()*512, Math.random()*512); }
+                ctx.stroke();
+            } else if(data.surfaceType === 'gas_slush') {
+                const grad = ctx.createLinearGradient(0,0,0,512);
+                grad.addColorStop(0, `#${col.getHexString()}`); grad.addColorStop(1, '#ffffff');
+                ctx.fillStyle = grad; ctx.fillRect(0,0,512,512);
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function createTerrain(data) {
+            const size = 2000;
+            const segs = 128;
+            const geo = new THREE.PlaneGeometry(size, size, segs, segs);
+            const pos = geo.attributes.position;
+            const scale = data.terrainScale || 20;
+            const height = data.terrainHeight || 10;
+            
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const y = pos.getY(i);
+                let z = 0;
+                if (data.type === 'star') {
+                    z = Math.sin(x/50)*Math.cos(y/50)*20 + simplex.noise2D(x/100, y/100)*15;
+                } else if (data.surfaceType === 'rock_lava') {
+                    z = simplex.noise2D(x/80, y/80) * 10;
+                } else if (data.surfaceType === 'rock_ice') {
+                    z = Math.abs(simplex.noise2D(x/40, y/40)) * 40; 
+                } else if (data.surfaceType === 'gas_slush') {
+                    z = Math.sin(x/150)*10 + Math.cos(y/150)*10;
+                } else if (data.surfaceType === 'gas_jupiter' || data.surfaceType === 'gas_saturn') {
+                    z = Math.sin(x/100)*5 + Math.cos(y/80)*5 + simplex.noise2D(x/200, y/200)*10;
+                } else if (data.type === 'rock') {
+                    z = simplex.noise2D(x/30, y/30) * 20;
+                }
+                const dist = Math.sqrt(x*x + y*y);
+                if (dist < 80) z *= (dist / 80);
+                pos.setZ(i, z);
+            }
+            geo.computeVertexNormals();
+            let matParams = { roughness: 0.8, side: THREE.DoubleSide };
+            if(['gas_jupiter', 'gas_saturn', 'rock_lava', 'gas_slush'].includes(data.surfaceType)) {
+                matParams.map = generateTerrainTexture(data);
+                matParams.color = 0xffffff;
+            } else {
+                matParams.color = data.groundColor;
+            }
+            if (data.surfaceType === 'rock_lava') {
+                matParams.emissive = 0xff3300; matParams.emissiveIntensity = 0.2; matParams.emissiveMap = matParams.map;
+            } else if (data.type === 'star') {
+                matParams.emissive = data.groundColor; matParams.emissiveIntensity = 0.6;
+            } else if (data.type === 'gas') {
+                matParams.transparent = true; matParams.opacity = 0.8; matParams.roughness = 0.4;
+            }
+            const mat = new THREE.MeshStandardMaterial(matParams);
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.y = -20;
+            return mesh;
+        }
+
+        function createRocks(data) {
+            if(data.type === 'gas' || data.type === 'star') return null;
+            const count = 1500;
+            let geo;
+            if(data.surfaceType === 'rock_ice') geo = new THREE.ConeGeometry(1, 5, 4);
+            else geo = new THREE.DodecahedronGeometry(1, 0);
+            const mat = new THREE.MeshStandardMaterial({ color: data.groundColor, roughness: 0.9 }); 
+            const mesh = new THREE.InstancedMesh(geo, mat, count);
+            const dummy = new THREE.Object3D();
+            for(let i=0; i<count; i++) {
+                const r = 50 + Math.random() * 800; 
+                const theta = Math.random() * Math.PI * 2;
+                const x = r * Math.cos(theta); const z = r * Math.sin(theta);
+                dummy.position.set(x, -19, z);
+                dummy.rotation.set(Math.random()*3, Math.random()*3, Math.random()*3);
+                let s = Math.random() * 3 + 0.5;
+                if(data.surfaceType === 'rock_ice') dummy.scale.set(s, s*3, s);
+                else dummy.scale.set(s, s, s);
+                dummy.updateMatrix();
+                mesh.setMatrixAt(i, dummy.matrix);
+            }
+            return mesh;
+        }
+
+        function createClouds(data) {
+            if(data.type !== 'gas') return [];
+            const layers = [];
+            const geo = new THREE.PlaneGeometry(3000, 3000, 64, 64);
+            const mat1 = new THREE.MeshBasicMaterial({ color: data.cloudColor, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false });
+            const l1 = new THREE.Mesh(geo, mat1); l1.rotation.x = -Math.PI/2; l1.position.y = -30; layers.push({ mesh: l1, speed: 0.0003 });
+            const mat2 = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.05, side: THREE.DoubleSide, depthWrite: false, wireframe: true });
+            const l2 = new THREE.Mesh(geo, mat2); l2.rotation.x = -Math.PI/2; l2.position.y = -10; layers.push({ mesh: l2, speed: 0.0008 });
+            return layers;
+        }
+
+        function createSkyRings(data) {
+            if(!data.hasRings) return null;
+            const inner = 300; const outer = 450;
+            const geo = new THREE.RingGeometry(inner, outer, 128);
+            const mat = new THREE.MeshBasicMaterial({ color: data.cloudColor || 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.3 });
+            const mesh = new THREE.Mesh(geo, mat);
+            if (data.ringTilt) mesh.rotation.y = Math.PI / 2; else mesh.rotation.x = Math.PI / 2 - 0.4; 
+            return mesh;
+        }
+
+        function togglePanel() {
+            document.getElementById('surface-panel').classList.toggle('collapsed');
+        }
+
+        function onCanvasClick(e) {
+            if (e.target.closest('.custom-select-wrapper') || e.target.closest('.ui-btn')) return;
+
+            if(document.body.classList.contains('mode-surface')) {
+                const panel = document.getElementById('surface-panel');
+                if (!panel.classList.contains('collapsed')) panel.classList.add('collapsed');
+                return;
+            }
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects([...planetMeshes, ...orbitRings]);
+            if(hits.length > 0) {
+                const obj = hits[0].object;
+                if (obj.userData.isPlanet) enterSurfaceMode(obj);
+                else if (obj.userData.targetPlanet) enterSurfaceMode(obj.userData.targetPlanet);
+            }
+        }
+
+        function enterSurfaceMode(planet) {
+            if(planet === earthOrbitMesh) return;
+
+            activePlanet = planet;
+            document.body.classList.add('mode-surface');
+            document.getElementById('orbit-overlay').style.opacity = 0;
+            document.getElementById('surface-panel').classList.remove('collapsed');
+
+            document.getElementById('nav-label').innerText = planet.userData.tc + " LINKED";
+            document.getElementById('p-tc').innerText = planet.userData.tc;
+            document.getElementById('p-en').innerText = planet.userData.name;
+            document.getElementById('p-rad').innerText = planet.userData.rad;
+            document.getElementById('p-dist').innerText = planet.userData.dist === 0 ? "0 (Center)" : planet.userData.realAU + " AU";
+            document.getElementById('p-grav').innerText = planet.userData.grav;
+            document.getElementById('p-temp').innerText = planet.userData.temp;
+            document.getElementById('p-desc').innerText = planet.userData.desc;
+            const hours = planet.userData.dayLength;
+            document.getElementById('p-daylen').innerText = hours + " 小時";
+            document.getElementById('tl-text').innerText = `${planet.userData.tc}的一天中觀測的地球 (0 - ${hours} 小時)`;
+
+            solarSystem.visible = false;
+            
+            if(!groundGroup) { groundGroup = new THREE.Group(); scene.add(groundGroup); }
+            if(!skyGroup) { skyGroup = new THREE.Group(); scene.add(skyGroup); }
+            
+            groundGroup.visible = true; skyGroup.visible = true; skyGroup.rotation.z = 0;
+            
+            if(terrainMesh) { groundGroup.remove(terrainMesh); terrainMesh = null; }
+            if(particles) { groundGroup.remove(particles); particles = null; }
+            if(instancedRocks) { groundGroup.remove(instancedRocks); instancedRocks = null; }
+            if(skyRings) { skyGroup.remove(skyRings); skyRings = null; }
+            cloudLayers.forEach(l => groundGroup.remove(l.mesh)); cloudLayers = [];
+
+            terrainMesh = createTerrain(planet.userData);
+            groundGroup.add(terrainMesh);
+
+            instancedRocks = createRocks(planet.userData);
+            if(instancedRocks) groundGroup.add(instancedRocks);
+
+            const clouds = createClouds(planet.userData);
+            if(clouds) clouds.forEach(l => { groundGroup.add(l.mesh); cloudLayers.push(l); });
+
+            skyRings = createSkyRings(planet.userData);
+            if(skyRings) skyGroup.add(skyRings);
+
+            if (planet.userData.fogDens > 0) {
+                scene.fog = new THREE.FogExp2(planet.userData.fogColor, planet.userData.fogDens);
+                renderer.setClearColor(planet.userData.fogColor);
+            } else {
+                scene.fog = null;
+                renderer.setClearColor(0x000000);
+            }
+
+            earthMesh.visible = true;
+            let distAU = 1.0;
+            if (planet.userData.name !== "SUN") distAU = Math.abs(planet.userData.realAU - 1.0);
+            
+            let visualScale = 5 / (distAU + 0.2);
+            if(visualScale > 12) visualScale = 12;
+            if(visualScale < 2.5) visualScale = 2.5;
+            if (distAU > 20) visualScale = 3.0; 
+
+            earthMesh.scale.setScalar(1);
+            if(earthMesh.userData.sprite) earthMesh.userData.sprite.scale.set(visualScale*3, visualScale*3, 1);
+
+            skyGroup.add(earthMesh);
+            earthMesh.position.set(400, 0, 0); 
+            
+            const sGeo = new THREE.SphereGeometry(10, 32, 32);
+            const sMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+            const sMesh = new THREE.Mesh(sGeo, sMat);
+            sMesh.position.set(-400, 200, -100); 
+            skyGroup.add(sMesh);
+
+            const stGeo = new THREE.BufferGeometry();
+            const stVerts = [];
+            for(let i=0; i<1000; i++) {
+                const r = 800;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                stVerts.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+            }
+            stGeo.setAttribute('position', new THREE.Float32BufferAttribute(stVerts, 3));
+            const stMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false });
+            const stars = new THREE.Points(stGeo, stMat);
+            skyGroup.add(stars);
+
+            if(trajectoryLine) skyGroup.remove(trajectoryLine);
+            const circlePoints = [];
+            for(let i=0; i<=128; i++) {
+                const theta = (i/128) * Math.PI * 2;
+                circlePoints.push(new THREE.Vector3(Math.cos(theta)*400, Math.sin(theta)*400, 0));
+            }
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(circlePoints);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x00f3ff, transparent:true, opacity:0.3, dashed:true });
+            trajectoryLine = new THREE.Line(lineGeo, lineMat);
+            skyGroup.add(trajectoryLine);
+
+            new TWEEN.Tween(camera.position)
+                .to({ x: 0, y: 10, z: 0 }, 1500) 
+                .easing(TWEEN.Easing.Cubic.InOut)
+                .onComplete(() => {
+                    camera.fov = CONFIG.fovSurface;
+                    camera.updateProjectionMatrix();
+                    camera.lookAt(100, 40, 0); 
+                })
+                .start();
+
+            updateTime(500);
+        }
+
+        function returnToOrbit() {
+            document.body.classList.remove('mode-surface');
+            document.getElementById('orbit-overlay').style.opacity = 1;
+            document.getElementById('earth-marker').style.display = 'none';
+            document.getElementById('nav-label').innerText = "SELECT TARGET";
+
+            if(groundGroup) groundGroup.visible = false;
+            if(skyGroup) {
+                skyGroup.visible = false;
+                while(skyGroup.children.length > 0) skyGroup.remove(skyGroup.children[0]);
+            }
+            earthMesh.visible = false;
+            scene.fog = null;
+            renderer.setClearColor(0x000000);
+
+            solarSystem.visible = true;
+            activePlanet = null;
+
+            camera.fov = CONFIG.fovOrbit;
+            camera.updateProjectionMatrix();
+
+            new TWEEN.Tween(camera.position)
+                .to({ x: 0, y: 100, z: CONFIG.camZ }, 1500)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .onUpdate(() => camera.lookAt(0,0,0))
+                .start();
+        }
+
+        function updateTime(val) {
+            if(!activePlanet || !skyGroup) return;
+            const pct = val / 1000;
+            const startAngle = -20 * (Math.PI/180);
+            const endAngle = 200 * (Math.PI/180);
+            const rot = startAngle + pct * (endAngle - startAngle);
+            skyGroup.rotation.z = rot;
+            updateMarker();
+        }
+
+        function updateMarker() {
+            const el = document.getElementById('earth-marker');
+            const v = new THREE.Vector3();
+            earthMesh.getWorldPosition(v);
+            v.project(camera);
+            if(v.z < 1 && v.x >= -1 && v.x <= 1 && v.y >= -1 && v.y <= 1) {
+                const x = (v.x * .5 + .5) * window.innerWidth;
+                const y = (-(v.y * .5) + .5) * window.innerHeight;
+                const worldV = new THREE.Vector3();
+                earthMesh.getWorldPosition(worldV);
+                if(worldV.y < -5) { el.style.display = 'none'; }
+                else {
+                    el.style.display = 'flex';
+                    el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+                }
+            } else { el.style.display = 'none'; }
+        }
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            TWEEN.update(time);
+            
+            if(!activePlanet) {
+                planetMeshes.forEach(p => { 
+                    if(p.userData.pivot) {
+                        // Apply Time Dilation here
+                        p.userData.pivot.rotation.y += p.userData.pivot.userData.speed * timeScale;
+                    }
+                });
+                if(solarSystem.userData.glow) solarSystem.userData.glow.lookAt(camera.position);
+            } else {
+                // Animate Clouds
+                cloudLayers.forEach(l => {
+                    l.mesh.rotation.z += l.speed;
+                });
+            }
+            renderer.render(scene, camera);
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        init();
+    </script>
+</body>
+</html>
